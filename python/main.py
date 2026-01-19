@@ -166,7 +166,7 @@ def get_stats():
 
 @app.route('/video_feed')
 def video_feed():
-    """Video streaming route for camera feed"""
+    """Video streaming route for camera feed with face detection overlay"""
     def generate():
         while True:
             try:
@@ -189,8 +189,45 @@ def video_feed():
                         cv2.putText(frame, 'Please wait...', (200, 250), 
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
                     else:
-                        # We have a frame! Resize it for display
-                        frame = cv2.resize(frame, (960, 540))  # Resize for web display
+                        # Make a writable copy of the frame for drawing
+                        frame = frame.copy()
+                        
+                        # Detect faces and draw overlays
+                        results = face_detector.detect_and_recognize_faces(frame)
+                        
+                        # Draw bounding boxes and labels on frame
+                        for result in results:
+                            bbox = result['bbox']
+                            name = result['name']
+                            confidence = result['confidence']
+                            
+                            # Draw rectangle around face
+                            color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)  # Green for known, Red for unknown
+                            cv2.rectangle(frame, 
+                                        (bbox['left'], bbox['top']), 
+                                        (bbox['right'], bbox['bottom']), 
+                                        color, 2)
+                            
+                            # Prepare label with name and confidence
+                            if name != "Unknown":
+                                label = f"{name} ({confidence*100:.1f}%)"
+                            else:
+                                label = "Unknown"
+                            
+                            # Draw label background
+                            label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                            cv2.rectangle(frame,
+                                        (bbox['left'], bbox['top'] - 30),
+                                        (bbox['left'] + label_size[0] + 10, bbox['top']),
+                                        color, -1)
+                            
+                            # Draw label text
+                            cv2.putText(frame, label,
+                                      (bbox['left'] + 5, bbox['top'] - 10),
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        
+                        # Resize for web display
+                        frame = cv2.resize(frame, (960, 540))
                 
                 # Encode frame as JPEG
                 ret, buffer = cv2.imencode('.jpg', frame)
@@ -203,7 +240,7 @@ def video_feed():
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
                 
-                time.sleep(0.1)  # 10 FPS
+                time.sleep(0.2)  # 5 FPS (reduced from 10 FPS for performance)
                 
             except GeneratorExit:
                 # Client disconnected

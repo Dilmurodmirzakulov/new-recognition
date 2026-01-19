@@ -23,7 +23,7 @@ class CameraStream:
             
             # Set video properties for faster processing
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Reduce buffer
-            self.cap.set(cv2.CAP_PROP_FPS, 5)  # 5 FPS is enough for attendance
+            self.cap.set(cv2.CAP_PROP_FPS, 3)  # 3 FPS for better performance (was 5)
             
             print("✅ Camera connected successfully")
         except Exception as e:

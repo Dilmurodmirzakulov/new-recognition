@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import { StudentModel } from './models/Student';
 import { SessionModel } from './models/Session';
 import { AttendanceModel } from './models/Attendance';
@@ -14,6 +15,9 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static images
+app.use('/images', express.static(path.join(__dirname, '../../images')));
 
 // Initialize database tables
 async function initializeDatabase() {

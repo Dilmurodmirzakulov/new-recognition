@@ -118,4 +118,60 @@ router.get('/sessions/:session_id/attendance', async (req, res) => {
   }
 });
 
+// Get all students
+router.get('/students', async (req, res) => {
+  try {
+    const students = await StudentModel.getAll();
+    res.json({ students });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+// Update student
+router.put('/students/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, class: className } = req.body;
+    
+    if (!name || !className) {
+      return res.status(400).json({ error: 'Missing name or class' });
+    }
+    
+    const student = await StudentModel.update(id, name, className);
+    res.json({ student });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+// Delete student
+router.delete('/students/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await StudentModel.delete(id);
+    res.json({ success: true, message: 'Student deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
+// Enroll new student
+router.post('/students/enroll', async (req, res) => {
+  try {
+    const { student_id, name, className, photo } = req.body;
+    
+    if (!student_id || !name || !className) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Create student in database
+    const student = await StudentModel.create(student_id, name, className, student_id);
+    
+    res.json({ student, message: 'Student enrolled successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 export default router;

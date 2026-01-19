@@ -4,6 +4,8 @@ import numpy as np
 from pathlib import Path
 import pickle
 import os
+import psycopg2
+from typing import Optional
 
 class FaceDetector:
     def __init__(self, encodings_path="encodings/known_faces.pkl"):
@@ -11,7 +13,22 @@ class FaceDetector:
         self.known_face_encodings = []
         self.known_face_names = []
         self.known_face_ids = []
+        self.db_url = os.getenv('DATABASE_URL', 'postgresql://attendance_user:secure_password_123@localhost:5432/yuksalish_attendance')
         self.load_encodings()
+    
+    def get_student_name_from_db(self, student_id: str) -> Optional[str]:
+        """Get current student name from database"""
+        try:
+            conn = psycopg2.connect(self.db_url)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM students WHERE student_id = %s", (student_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            return result[0] if result else None
+        except Exception as e:
+            print(f"⚠️ Database error: {e}")
+            return None
     
     def load_encodings(self):
         """Load pre-calculated face encodings from file"""
@@ -36,13 +53,12 @@ class FaceDetector:
         Returns:
             List of dicts with student_id, name, confidence, bbox
         """
-        # Use higher resolution for better long-distance detection
-        # Process at 75% resolution for better quality while maintaining speed
-        small_frame = cv2.resize(frame, (0, 0), fx=0.75, fy=0.75)
+        # Process at 50% resolution for better performance (was 75%)
+        small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
         
-        # Detect faces with more upsampling for better distant face detection (3x upsampling)
-        face_locations = face_recognition.face_locations(rgb_small_frame, model="hog", number_of_times_to_upsample=3)
+        # Detect faces with 1x upsampling for performance (was 3x)
+        face_locations = face_recognition.face_locations(rgb_small_frame, model="hog", number_of_times_to_upsample=1)
         
         if not face_locations:
             return []
@@ -74,11 +90,15 @@ class FaceDetector:
                 
                 # Lower confidence threshold for better recognition
                 if matches[best_match_index] and confidence >= confidence_threshold:
-                    name = self.known_face_names[best_match_index]
                     student_id = self.known_face_ids[best_match_index]
+                    # Get current name from database instead of cached name
+                    name = self.get_student_name_from_db(student_id)
+                    if name is None:
+                        # Fallback to cached name if database query fails
+                        name = self.known_face_names[best_match_index]
             
-            # Scale back up face coordinates (adjusted for 0.75x scaling)
-            scale_factor = 1 / 0.75
+            # Scale back up face coordinates (adjusted for 0.5x scaling)
+            scale_factor = 1 / 0.5
             top = int(top * scale_factor)
             right = int(right * scale_factor)
             bottom = int(bottom * scale_factor)

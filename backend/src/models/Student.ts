@@ -6,6 +6,7 @@ export interface Student {
   student_id: string;
   class: string;
   face_encoding_id: string;
+  photo_path?: string;
   created_at: Date;
 }
 
