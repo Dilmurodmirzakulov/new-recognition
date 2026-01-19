@@ -182,10 +182,15 @@ def video_feed():
                 else:
                     frame = camera_stream.get_frame()
                     if frame is None:
-                        # No frame available
+                        # No frame available - show waiting message
                         frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                        cv2.putText(frame, 'Waiting for camera...', (150, 240), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                        cv2.putText(frame, 'Connecting to camera...', (120, 200), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                        cv2.putText(frame, 'Please wait...', (200, 250), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1)
+                    else:
+                        # We have a frame! Resize it for display
+                        frame = cv2.resize(frame, (960, 540))  # Resize for web display
                 
                 # Encode frame as JPEG
                 ret, buffer = cv2.imencode('.jpg', frame)

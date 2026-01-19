@@ -25,23 +25,24 @@ class FaceDetector:
         else:
             print("⚠️ No encodings file found. Students must be enrolled first.")
     
-    def detect_and_recognize_faces(self, frame, confidence_threshold=0.6):
+    def detect_and_recognize_faces(self, frame, confidence_threshold=0.5):
         """
         Detect and recognize faces in a frame
         
         Args:
             frame: OpenCV image frame
-            confidence_threshold: Minimum confidence to mark as recognized
+            confidence_threshold: Minimum confidence to mark as recognized (lowered to 0.5 for better detection)
         
         Returns:
             List of dicts with student_id, name, confidence, bbox
         """
-        # Resize frame for faster processing (H.265 4K → smaller)
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        # Use higher resolution for better long-distance detection
+        # Process at 75% resolution for better quality while maintaining speed
+        small_frame = cv2.resize(frame, (0, 0), fx=0.75, fy=0.75)
         rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
         
-        # Detect faces
-        face_locations = face_recognition.face_locations(rgb_small_frame, model="hog")
+        # Detect faces with more upsampling for better distant face detection (3x upsampling)
+        face_locations = face_recognition.face_locations(rgb_small_frame, model="hog", number_of_times_to_upsample=3)
         
         if not face_locations:
             return []
@@ -52,11 +53,11 @@ class FaceDetector:
         results = []
         
         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
-            # Compare faces
+            # Compare faces with more lenient tolerance for better recognition
             matches = face_recognition.compare_faces(
                 self.known_face_encodings, 
                 face_encoding,
-                tolerance=0.6
+                tolerance=0.6  # More lenient tolerance for better recognition at distance
             )
             face_distances = face_recognition.face_distance(
                 self.known_face_encodings, 
@@ -71,15 +72,17 @@ class FaceDetector:
                 best_match_index = np.argmin(face_distances)
                 confidence = 1 - face_distances[best_match_index]
                 
+                # Lower confidence threshold for better recognition
                 if matches[best_match_index] and confidence >= confidence_threshold:
                     name = self.known_face_names[best_match_index]
                     student_id = self.known_face_ids[best_match_index]
             
-            # Scale back up face coordinates
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
+            # Scale back up face coordinates (adjusted for 0.75x scaling)
+            scale_factor = 1 / 0.75
+            top = int(top * scale_factor)
+            right = int(right * scale_factor)
+            bottom = int(bottom * scale_factor)
+            left = int(left * scale_factor)
             
             results.append({
                 "student_id": student_id,

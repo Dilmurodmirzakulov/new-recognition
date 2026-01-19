@@ -1,0 +1,7 @@
+
+> yuksalish-attendance-backend@1.0.0 dev
+> ts-node src/server.ts
+
+📊 Initializing database tables...
+✅ Database tables initialized
+🚀 Server running on http://localhost:3001
