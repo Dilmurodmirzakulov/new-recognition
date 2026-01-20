@@ -41,22 +41,29 @@ def start_detection():
                 "mode": "simulation"
             }), 200
         
-        if camera_stream is None:
-            camera_stream = CameraStreamFFmpeg(RTSP_URL)
+        # Always reinitialize camera stream to ensure fresh connection
+        if camera_stream is not None:
+            # Clean up existing stream if any
             try:
-                camera_stream.connect()
-            except Exception as conn_err:
-                print(f"⚠️ Camera connection failed: {conn_err}")
-                camera_stream = None
-                # Continue in simulation mode
-                return jsonify({
-                    "status": "started",
-                    "message": f"Running in simulation mode (camera unavailable: {str(conn_err)})",
-                    "mode": "simulation"
-                }), 200
+                camera_stream.stop_stream()
+            except:
+                pass
+            camera_stream = None
         
-        camera_stream.start_stream()
-        return jsonify({"status": "started", "message": "Camera stream started", "mode": "live"}), 200
+        camera_stream = CameraStreamFFmpeg(RTSP_URL)
+        try:
+            camera_stream.connect()
+            camera_stream.start_stream()
+            return jsonify({"status": "started", "message": "Camera stream started", "mode": "live"}), 200
+        except Exception as conn_err:
+            print(f"⚠️ Camera connection failed: {conn_err}")
+            camera_stream = None
+            # Continue in simulation mode
+            return jsonify({
+                "status": "started",
+                "message": f"Running in simulation mode (camera unavailable: {str(conn_err)})",
+                "mode": "simulation"
+            }), 200
     except Exception as e:
         print(f"❌ Error starting detection: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -68,6 +75,7 @@ def stop_detection():
     
     if camera_stream:
         camera_stream.stop_stream()
+        camera_stream = None  # Reset to allow reconnection on next start
     
     return jsonify({"status": "stopped", "message": "Camera stream stopped"}), 200
 

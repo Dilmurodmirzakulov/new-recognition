@@ -7,8 +7,7 @@
 - Network:       http://192.168.34.66:3000
 
 ✓ Starting...
-✓ Ready in 496ms
- GET /dashboard 200 in 332ms (compile: 229ms, render: 103ms)
- GET /dashboard 200 in 21ms (compile: 1255µs, render: 20ms)
- GET / 200 in 175ms (compile: 134ms, render: 41ms)
- GET /dashboard 200 in 28ms (compile: 14ms, render: 14ms)
+✓ Ready in 565ms
+ GET /dashboard 200 in 315ms (compile: 228ms, render: 87ms)
+ GET / 200 in 73ms (compile: 36ms, render: 37ms)
+ GET /dashboard 200 in 30ms (compile: 9ms, render: 21ms)
