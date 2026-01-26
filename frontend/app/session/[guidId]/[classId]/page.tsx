@@ -267,8 +267,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                 <div
                   key={student.userId}
                   className={`flex items-center justify-between p-3 border rounded-lg shadow-sm hover:shadow-md transition-all ${student.isAttended
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-white border-gray-100'
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-white border-gray-100'
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -295,14 +295,14 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                     {/* Confidence Badge */}
                     {student.confidence !== 0 && (
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${student.confidence === 105
-                          ? 'bg-blue-100 text-blue-700'
-                          : student.confidence === -1
-                            ? 'bg-red-100 text-red-700'
-                            : student.confidence >= 70
-                              ? 'bg-green-100 text-green-700'
-                              : student.confidence >= 50
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-gray-100 text-gray-600'
+                        ? 'bg-blue-100 text-blue-700'
+                        : student.confidence === -1
+                          ? 'bg-red-100 text-red-700'
+                          : student.confidence >= 70
+                            ? 'bg-green-100 text-green-700'
+                            : student.confidence >= 50
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-gray-100 text-gray-600'
                         }`}>
                         {student.confidence === 105
                           ? 'Manual'
@@ -321,8 +321,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                           onClick={() => handleManualAttendance(student.userId, true)}
                           disabled={processingStudent !== null}
                           className={`p-1.5 rounded-full transition-colors ${student.isAttended && student.confidence === 105
-                              ? 'bg-green-500 text-white'
-                              : 'hover:bg-green-100 text-gray-400 hover:text-green-600'
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-green-100 text-gray-400 hover:text-green-600'
                             }`}
                           title="Mark Present (Manual)"
                         >
@@ -332,8 +332,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                           onClick={() => handleManualAttendance(student.userId, false)}
                           disabled={processingStudent !== null}
                           className={`p-1.5 rounded-full transition-colors ${!student.isAttended && student.confidence === -1
-                              ? 'bg-red-500 text-white'
-                              : 'hover:bg-red-100 text-gray-400 hover:text-red-600'
+                            ? 'bg-red-500 text-white'
+                            : 'hover:bg-red-100 text-gray-400 hover:text-red-600'
                             }`}
                           title="Mark Absent (Manual)"
                         >
@@ -344,8 +344,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
 
                     {/* Status Icon */}
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${student.isAttended
-                        ? 'bg-green-100'
-                        : 'bg-gray-100'
+                      ? 'bg-green-100'
+                      : 'bg-gray-100'
                       }`}>
                       {student.isAttended ? (
                         <CheckCircle className="w-5 h-5 text-green-600" />
