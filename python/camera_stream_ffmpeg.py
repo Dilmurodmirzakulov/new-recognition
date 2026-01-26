@@ -87,12 +87,6 @@ class CameraStreamFFmpeg:
                 
                 try:
                     self.frame_queue.put(frame, timeout=1)
-                    # Debug: print every 10th frame
-                    if not hasattr(self, '_frame_count'):
-                        self._frame_count = 0
-                    self._frame_count += 1
-                    if self._frame_count % 10 == 0:
-                        print(f"📹 Queued {self._frame_count} frames (queue size: {self.frame_queue.qsize()})")
                 except:
                     pass
                     

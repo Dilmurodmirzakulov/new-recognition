@@ -1,237 +1,90 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { attendanceAPI } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { attendanceService } from '@/lib/api';
+import { BookOpen, LogOut, Loader2, ChevronRight } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
-interface AttendanceRecord {
-  student_id: string;
+interface Module {
+  id: number;
   name: string;
-  confidence: number;
-  recorded_at: string;
-}
-
-interface Session {
-  session_id: string;
-  class: string;
-  subject: string;
-  status: string;
+  code: string;
 }
 
 export default function Dashboard() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [className, setClassName] = useState('10-A');
-  const [subject, setSubject] = useState('Mathematics');
-  const [loading, setLoading] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { logout, user } = useAuth();
 
-  // Start session
-  const handleStartSession = async () => {
+  useEffect(() => {
+    fetchModules();
+  }, []);
+
+  const fetchModules = async () => {
     try {
-      setLoading(true);
-      const result = await attendanceAPI.startSession(className, subject, 'teacher-001');
-      setSession(result);
-      setAttendance([]);
-      setIsDetecting(true);
-      
-      // Auto-detect every 5 seconds (reduced frequency for performance)
-      const interval = setInterval(async () => {
-        await detectFaces(result.session_id);
-      }, 5000);
-      
-      // Store interval ID
-      (window as any).detectionInterval = interval;
-    } catch (err) {
-      console.error('Error starting session:', err);
-      alert('Failed to start session');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Detect faces
-  const detectFaces = async (sessionId: string) => {
-    try {
-      const result = await attendanceAPI.detectFaces(sessionId);
-      
-      if (result.students && result.students.length > 0) {
-        // Add new students to list
-        setAttendance(prev => {
-          const ids = new Set(prev.map(a => a.student_id));
-          const newStudents = result.students.filter(
-            (s: AttendanceRecord) => !ids.has(s.student_id)
-          );
-          return [...prev, ...newStudents];
-        });
-      }
-    } catch (err) {
-      console.error('Error detecting faces:', err);
-    }
-  };
-
-  // End session
-  const handleEndSession = async () => {
-    if (!session) return;
-
-    try {
-      setLoading(true);
-      
-      // Clear auto-detection
-      if ((window as any).detectionInterval) {
-        clearInterval((window as any).detectionInterval);
-      }
-      
-      await attendanceAPI.endSession(session.session_id);
-      setSession(null);
-      setIsDetecting(false);
-    } catch (err) {
-      console.error('Error ending session:', err);
+      const data = await attendanceService.getMyModules();
+      setModules(data);
+    } catch (error) {
+      console.error('Failed to fetch modules:', error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800">
-            📚 Classroom Attendance System
-          </h1>
-          <div className="flex gap-3">
-            <Link
-              href="/live"
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-            >
-              📹 Live Feed
-            </Link>
-            <Link
-              href="/students"
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              👥 Students
-            </Link>
-          </div>
-        </div>
-
-        {!session ? (
-          // Start Session Form
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Start Attendance Session</h2>
-            
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Class
-                </label>
-                <input
-                  type="text"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  placeholder="e.g., 10-A"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Subject
-                </label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="e.g., Mathematics"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Navbar */}
+      <nav className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-2 rounded-lg text-white">
+              <BookOpen className="w-5 h-5" />
             </div>
+            <span className="font-bold text-gray-800 text-lg">My Modules</span>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 text-gray-600 hover:text-red-600 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
+        </div>
+      </nav>
 
-            <button
-              onClick={handleStartSession}
-              disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold py-3 px-4 rounded-lg transition"
-            >
-              {loading ? 'Starting...' : '▶️ Start Session'}
-            </button>
+      {/* Content */}
+      <main className="max-w-7xl mx-auto p-6">
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
         ) : (
-          // Active Session
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">
-                  Active Session: {session.class}
-                </h2>
-                <p className="text-gray-600">Subject: {subject}</p>
-              </div>
-              <button
-                onClick={handleEndSession}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white font-bold py-2 px-6 rounded-lg transition"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {modules.map((module) => (
+              <div
+                key={module.id}
+                onClick={() => router.push(`/dashboard/${module.id}`)}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all group"
               >
-                {loading ? 'Ending...' : '⏹️ End Session'}
-              </button>
-            </div>
-
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-              <p className="text-blue-700 mb-4">
-                🎥 Camera is live - detecting student faces in real-time
-              </p>
-              {/* Live Camera Feed */}
-              <div className="bg-black rounded-lg overflow-hidden">
-                <img 
-                  src="http://localhost:5000/video_feed" 
-                  alt="Live Camera Feed"
-                  className="w-full h-auto"
-                  style={{ maxHeight: '400px', objectFit: 'contain' }}
-                />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                    {module.code}
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 line-clamp-2">
+                  {module.name}
+                </h3>
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center text-sm text-gray-500">
+                  <span>View Lessons</span>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         )}
-
-        {/* Attendance List */}
-        {attendance.length > 0 && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">
-              ✅ Attendance ({attendance.length} students)
-            </h3>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-100 border-b">
-                    <th className="px-4 py-2 text-left font-bold text-gray-700">#</th>
-                    <th className="px-4 py-2 text-left font-bold text-gray-700">Student ID</th>
-                    <th className="px-4 py-2 text-left font-bold text-gray-700">Name</th>
-                    <th className="px-4 py-2 text-left font-bold text-gray-700">Confidence</th>
-                    <th className="px-4 py-2 text-left font-bold text-gray-700">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendance.map((record, idx) => (
-                    <tr key={idx} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-2">{idx + 1}</td>
-                      <td className="px-4 py-2 font-mono">{record.student_id}</td>
-                      <td className="px-4 py-2">{record.name}</td>
-                      <td className="px-4 py-2">
-                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                          {(record.confidence * 100).toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-500">
-                        {new Date(record.recorded_at || Date.now()).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
+      </main>
     </div>
   );
 }
