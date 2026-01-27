@@ -46,6 +46,7 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
   const [ptzSpeed, setPtzSpeed] = useState(4);
   const [isPtzMoving, setIsPtzMoving] = useState(false);
   const [patrolActive, setPatrolActive] = useState(false);
+  const [autoPatrol, setAutoPatrol] = useState(true); // Auto-start patrol by default
   const [patrolPresets, setPatrolPresets] = useState('1,2,3');
   const [patrolDwell, setPatrolDwell] = useState(5);
   const cameraContainerRef = useRef<HTMLDivElement>(null);
@@ -382,12 +383,28 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
     // Start polling for detections every 2 seconds
     pollingIntervalRef.current = setInterval(pollDetections, 2000);
 
+    // Auto-start patrol if enabled (only once on mount)
+    if (autoPatrol) {
+      const patrolTimer = setTimeout(() => {
+        startPatrol();
+      }, 2000); // Delay to let camera start first
+
+      return () => {
+        clearTimeout(patrolTimer);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+        }
+        stopPatrol();
+      };
+    }
+
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
       }
+      stopPatrol();
     };
-  }, [fetchStudents, pollDetections]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Get student image URL
   const getStudentImageUrl = (userId: string) => {
@@ -427,6 +444,23 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
             <div className={`w-2 h-2 rounded-full ${cameraActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             {cameraActive ? 'Camera Active' : 'Camera Stopped'}
           </div>
+          <button
+            onClick={() => {
+              if (patrolActive) {
+                stopPatrol();
+              } else {
+                startPatrol();
+              }
+            }}
+            className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition-colors ${patrolActive
+              ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            title={patrolActive ? 'Stop Auto-Patrol' : 'Start Auto-Patrol'}
+          >
+            <div className={`w-2 h-2 rounded-full ${patrolActive ? 'bg-orange-500 animate-pulse' : 'bg-gray-400'}`} />
+            {patrolActive ? '🔄 Auto-Patrol' : 'Auto-Patrol'}
+          </button>
           <button
             onClick={fetchStudents}
             className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
@@ -675,8 +709,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                       onClick={startPatrol}
                       disabled={patrolActive}
                       className={`flex-1 py-2 px-3 rounded text-xs font-medium transition-colors ${patrolActive
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-green-600 hover:bg-green-500 text-white'
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-green-600 hover:bg-green-500 text-white'
                         }`}
                     >
                       {patrolActive ? 'Scanning...' : 'Start'}
@@ -685,8 +719,8 @@ export default function LiveSession({ params }: { params: Promise<{ guidId: stri
                       onClick={stopPatrol}
                       disabled={!patrolActive}
                       className={`flex-1 py-2 px-3 rounded text-xs font-medium transition-colors ${!patrolActive
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-red-600 hover:bg-red-500 text-white'
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-500 text-white'
                         }`}
                     >
                       Stop

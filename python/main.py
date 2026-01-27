@@ -17,13 +17,13 @@ app = Flask(__name__)
 CORS(app)
 
 # Camera configuration
-RTSP_URL = os.getenv("CAMERA_RTSP_URL", "rtsp://admin:1qaz2wsx@@192.168.34.196:554/Streaming/Channels/101")
+RTSP_URL = os.getenv("CAMERA_RTSP_URL", "rtsp://admin:1qaz2wsx%40@192.168.34.196:554/Streaming/Channels/101")
 SRS_COOKIE = os.getenv("SRS_COOKIE", "UserLoginCookie25=CfDJ8KVxKgiAMW1FmYphz-ha4c1HzugeMxI8L9l_yxaWd1cJHbeC16fyW7V0Sj0v3V7MenwGGPtGzKieNDm3qhfzWn6NHMPkKeglUTspIJZ_yf47PIptQcL2ZFZmDSxocghzdS21PcWlSDx6ut4yD9L9qSMJ2pEWqU5USo2TOKNhonIBTSCu0HlupLFFKKqS5muxg7bxVYyNw8eH4sQulRkfMPttMIa7PKgT6oDc_JQ4abKXLL4mBYenL0oC7ki-sdGcmhYw8gToOQrhqRJ9Yf9nKwt4H5PHoSJ78C0mI-1ZSgOB")
 
 camera_stream = None
 face_detector = FaceDetector()
 
-USE_SIMULATION = os.getenv("USE_SIMULATION", "false").lower() == "true"
+USE_SIMULATION = os.getenv("USE_SIMULATION", "false").lower() == "false"
 
 # PTZ Patrol state
 patrol_active = False
@@ -43,14 +43,25 @@ def health():
     return jsonify({"status": "ok", "service": "Face Recognition Service"})
 
 
+# Lock for camera operations
+camera_lock = threading.Lock()
+
 @app.route('/start', methods=['POST'])
 def start_camera():
     """Start camera stream"""
     global camera_stream
     
+    # Prevent concurrent start requests
+    if not camera_lock.acquire(blocking=False):
+        return jsonify({"status": "already_starting"}), 200
+    
     try:
         if USE_SIMULATION:
             return jsonify({"status": "started", "mode": "simulation"}), 200
+        
+        # If already running, don't restart
+        if camera_stream is not None and camera_stream.running:
+            return jsonify({"status": "already_running", "mode": "live"}), 200
         
         if camera_stream is not None:
             try:
@@ -58,6 +69,7 @@ def start_camera():
             except:
                 pass
             camera_stream = None
+            time.sleep(0.5)  # Brief pause before restarting
         
         camera_stream = CameraStreamFFmpeg(RTSP_URL)
         camera_stream.connect()
@@ -67,6 +79,8 @@ def start_camera():
     except Exception as e:
         print(f"⚠️ Camera error: {e}")
         return jsonify({"status": "started", "mode": "simulation", "error": str(e)}), 200
+    finally:
+        camera_lock.release()
 
 
 @app.route('/stop', methods=['POST'])
@@ -380,9 +394,12 @@ def get_camera_ip():
 def get_camera_credentials():
     """Extract credentials from RTSP URL"""
     import re
-    match = re.search(r'rtsp://([^:]+):([^@]+)@', RTSP_URL)
+    # Handle URLs like rtsp://user:pass@@ip or rtsp://user:pass@ip
+    match = re.search(r'rtsp://([^:]+):([^@]+)@@?', RTSP_URL)
     if match:
-        return match.group(1), match.group(2).rstrip('@')
+        username = match.group(1)
+        password = match.group(2)
+        return username, password
     return 'admin', 'admin'
 
 CAMERA_IP = get_camera_ip()
@@ -508,37 +525,126 @@ def ptz_home():
 
 
 def patrol_worker():
-    """Background thread that cycles through presets"""
+    """Background thread that cycles through presets or pan movements"""
     global patrol_active
-    print(f"🔄 PTZ Patrol started: presets={patrol_config['presets']}, dwell={patrol_config['dwell_time']}s")
+    print(f"🔄 PTZ Patrol started: presets={patrol_config['presets']}, dwell={patrol_config['dwell_time']}s", flush=True)
+    print(f"🎮 Using camera: {CAMERA_IP} with user: {CAMERA_USER}", flush=True)
     
-    while patrol_active and not patrol_stop_event.is_set():
-        for preset in patrol_config['presets']:
-            if not patrol_active or patrol_stop_event.is_set():
-                break
-            
-            # Go to preset
-            try:
-                url = f"http://{CAMERA_IP}/ISAPI/PTZCtrl/channels/1/presets/{preset}/goto"
-                requests.put(url, auth=(CAMERA_USER, CAMERA_PASS), timeout=2)
-                print(f"📍 Patrol: Moving to preset {preset}")
-            except Exception as e:
-                print(f"Patrol error at preset {preset}: {e}")
-            
-            # Dwell with interruptible sleep (check every 0.5s for responsive stop)
-            dwell_time = patrol_config['dwell_time']
-            elapsed = 0
-            while elapsed < dwell_time and patrol_active and not patrol_stop_event.is_set():
-                time.sleep(0.5)
-                elapsed += 0.5
+    try:
+        from requests.auth import HTTPDigestAuth
         
-        # If not looping, stop
-        if not patrol_config['loop']:
-            with patrol_lock:
-                patrol_active = False
-            break
+        # Try preset-based patrol first
+        preset_failed = False
+        
+        while patrol_active and not patrol_stop_event.is_set():
+            
+            if not preset_failed:
+                # Try preset-based patrol
+                for preset in patrol_config['presets']:
+                    if not patrol_active or patrol_stop_event.is_set():
+                        break
+                    
+                    # Go to preset - try both auth methods
+                    try:
+                        url = f"http://{CAMERA_IP}/ISAPI/PTZCtrl/channels/1/presets/{preset}/goto"
+                        
+                        # Try Digest auth first (more common for Hikvision)
+                        response = requests.put(url, auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        
+                        if response.status_code == 401:
+                            # Try Basic auth
+                            response = requests.put(url, auth=(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        
+                        if response.status_code == 200:
+                            print(f"✅ Patrol: Moved to preset {preset}", flush=True)
+                        elif response.status_code == 404 or response.status_code == 401:
+                            print(f"⚠️ Patrol: Preset mode failed (status {response.status_code}), switching to continuous pan mode", flush=True)
+                            preset_failed = True
+                            break
+                        else:
+                            print(f"⚠️ Patrol: Preset {preset} returned status {response.status_code}", flush=True)
+                    except Exception as e:
+                        print(f"⚠️ Patrol: Preset mode error: {e}, switching to continuous pan mode", flush=True)
+                        preset_failed = True
+                        break
+                    
+                    # Dwell with interruptible sleep
+                    dwell_time = patrol_config['dwell_time']
+                    elapsed = 0
+                    while elapsed < dwell_time and patrol_active and not patrol_stop_event.is_set():
+                        time.sleep(0.5)
+                        elapsed += 0.5
+            
+            if preset_failed:
+                # Fallback: Use continuous pan left and right
+                print(f"🔄 Patrol: Using continuous pan mode (no presets)", flush=True)
+                
+                # Pan right for a few seconds
+                if patrol_active and not patrol_stop_event.is_set():
+                    try:
+                        url = f"http://{CAMERA_IP}/ISAPI/PTZCtrl/channels/1/continuous"
+                        data = f"""<?xml version="1.0" encoding="UTF-8"?>
+<PTZData>
+    <pan>50</pan>
+    <tilt>0</tilt>
+</PTZData>"""
+                        response = requests.put(url, data=data, auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        if response.status_code != 200:
+                            response = requests.put(url, data=data, auth=(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        
+                        print(f"📍 Patrol: Panning right...", flush=True)
+                        time.sleep(patrol_config['dwell_time'])
+                        
+                        # Stop movement
+                        data_stop = f"""<?xml version="1.0" encoding="UTF-8"?>
+<PTZData>
+    <pan>0</pan>
+    <tilt>0</tilt>
+</PTZData>"""
+                        requests.put(url, data=data_stop, auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS), timeout=5)
+                    except Exception as e:
+                        print(f"⚠️ Continuous patrol error: {e}", flush=True)
+                
+                # Pan left for a few seconds
+                if patrol_active and not patrol_stop_event.is_set():
+                    try:
+                        url = f"http://{CAMERA_IP}/ISAPI/PTZCtrl/channels/1/continuous"
+                        data = f"""<?xml version="1.0" encoding="UTF-8"?>
+<PTZData>
+    <pan>-50</pan>
+    <tilt>0</tilt>
+</PTZData>"""
+                        response = requests.put(url, data=data, auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        if response.status_code != 200:
+                            response = requests.put(url, data=data, auth=(CAMERA_USER, CAMERA_PASS), timeout=5)
+                        
+                        print(f"📍 Patrol: Panning left...", flush=True)
+                        time.sleep(patrol_config['dwell_time'])
+                        
+                        # Stop movement
+                        data_stop = f"""<?xml version="1.0" encoding="UTF-8"?>
+<PTZData>
+    <pan>0</pan>
+    <tilt>0</tilt>
+</PTZData>"""
+                        requests.put(url, data=data_stop, auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS), timeout=5)
+                    except Exception as e:
+                        print(f"⚠️ Continuous patrol error: {e}", flush=True)
+            
+            # If not looping, stop
+            if not patrol_config['loop']:
+                with patrol_lock:
+                    patrol_active = False
+                break
     
-    print("🛑 PTZ Patrol stopped")
+    except Exception as e:
+        print(f"❌ Patrol worker fatal error: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        with patrol_lock:
+            patrol_active = False
+    
+    print("🛑 PTZ Patrol stopped", flush=True)
 
 
 @app.route('/ptz/patrol/start', methods=['POST'])
@@ -558,7 +664,11 @@ def start_patrol():
     
     with patrol_lock:
         if patrol_active:
-            return jsonify({"error": "Patrol already running"}), 400
+            # Already running - return success instead of error
+            return jsonify({
+                "status": "already_running",
+                "config": patrol_config
+            }), 200
         
         # Update config from request
         data = request.json or {}
@@ -613,4 +723,5 @@ if __name__ == '__main__':
     print(f"📹 Camera: {RTSP_URL[:50]}...")
     if CAMERA_IP:
         print(f"🎮 PTZ Control: http://{CAMERA_IP}")
+        print(f"🔑 PTZ Auth: user={CAMERA_USER}, pass={'*' * len(CAMERA_PASS)} ({len(CAMERA_PASS)} chars)")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

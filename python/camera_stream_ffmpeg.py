@@ -65,12 +65,21 @@ class CameraStreamFFmpeg:
                 
                 if len(raw_frame) != frame_size:
                     print("⚠️ Incomplete frame, reconnecting...")
-                    self.stop_stream()
+                    # Kill the FFmpeg process
+                    if self.process:
+                        self.process.terminate()
+                        try:
+                            self.process.wait(timeout=2)
+                        except:
+                            self.process.kill()
+                    
                     time.sleep(2)
+                    
+                    # Reconnect without calling start_stream (we're already in the loop)
                     try:
                         self.connect()
-                        self.start_stream()
-                    except:
+                    except Exception as e:
+                        print(f"❌ Reconnect failed: {e}")
                         break
                     continue
                 

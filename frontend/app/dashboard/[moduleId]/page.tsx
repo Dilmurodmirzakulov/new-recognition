@@ -265,6 +265,10 @@ export default function ModuleDetails({ params }: { params: Promise<{ moduleId: 
                     >
                       <div className="font-medium text-gray-900">{slot.dayOfWeek}</div>
                       <div className="text-gray-500">{slot.time}</div>
+                      <div className="text-sm text-gray-600 mt-1 flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" />
+                        {slot.user}
+                      </div>
                     </div>
                   ))}
                 </div>
